@@ -1,0 +1,31 @@
+from pathlib import Path
+import yaml
+
+
+class ConfigManager:
+    """
+    Responsável por carregar as configurações do projeto.
+    """
+
+    def __init__(self, config_path="config/config.yaml"):
+
+        self.config_path = Path(config_path)
+
+        if not self.config_path.exists():
+            raise FileNotFoundError(
+                f"Arquivo não encontrado: {self.config_path}"
+            )
+
+        with open(self.config_path, "r", encoding="utf-8") as file:
+            self.config = yaml.safe_load(file)
+
+    def get(self, key):
+
+        keys = key.split(".")
+
+        value = self.config
+
+        for item in keys:
+            value = value[item]
+
+        return value

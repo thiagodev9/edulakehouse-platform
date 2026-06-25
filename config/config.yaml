@@ -1,0 +1,23 @@
+project:
+  name: EduLakehouse
+  version: 1.0.0
+  environment: dev
+
+paths:
+  landing: data/landing
+  bronze: data/bronze
+  silver: data/silver
+  gold: data/gold
+  logs: logging
+
+logging:
+  level: INFO
+  format: "%(asctime)s | %(levelname)s | %(message)s"
+
+pipeline:
+  retries: 3
+  timeout: 600
+
+quality:
+  fail_on_nulls: true
+  fail_on_duplicates: true
