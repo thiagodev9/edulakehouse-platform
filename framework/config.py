@@ -1,6 +1,8 @@
 from pathlib import Path
 import yaml
 
+from framework.dataset import Dataset
+
 
 class ConfigManager:
     """
@@ -29,3 +31,17 @@ class ConfigManager:
             value = value[item]
 
         return value
+
+    def get_dataset(self, dataset_name) -> Dataset:
+
+        with open(
+            "config/datasets.yaml",
+            "r",
+            encoding="utf-8"
+        ) as file:
+
+            datasets = yaml.safe_load(file)
+
+        data = datasets["datasets"][dataset_name]
+
+        return Dataset(**data)
