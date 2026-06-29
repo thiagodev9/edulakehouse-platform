@@ -4,13 +4,29 @@ import yaml
 from framework.dataset import Dataset
 
 PIPELINE_VERSION = "1.0.0"
-REPARTITIONS = 4
-DEBUG = True
-SHOW_SAMPLE = True
-SHOW_SCHEMA = True
-SAVE_AUDIT = True
-SAVE_QUALITY = True
-SAVE_METRICS = True
+
+
+def _load_config(path="config/config.yaml"):
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _cfg():
+    try:
+        return _load_config()
+    except FileNotFoundError:
+        return {}
+
+
+_c = _cfg()
+
+REPARTITIONS = _c.get("pipeline", {}).get("repartitions", 4)
+DEBUG = _c.get("debug", {}).get("show_nulls", True)
+SHOW_SCHEMA = _c.get("debug", {}).get("show_schema", True)
+SHOW_SAMPLE = _c.get("debug", {}).get("show_sample", True)
+SAVE_AUDIT = _c.get("save", {}).get("audit", True)
+SAVE_QUALITY = _c.get("save", {}).get("quality", True)
+SAVE_METRICS = _c.get("save", {}).get("metrics", True)
 
 
 class ConfigManager:

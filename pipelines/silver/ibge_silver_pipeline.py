@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 from pyspark import StorageLevel
+from pyspark.sql import functions as F
 
 from framework.audit import AuditManager
 from framework.config import (
@@ -55,59 +56,56 @@ class IBGESilverPipeline:
 
         self.logger.info("Flatten dos dados...")
 
-        from pyspark.sql import functions as F
-
-        flattened = df.select(
-
-            df.id.alias("municipio_id"),
-
-            df.nome.alias("municipio_nome"),
-
-            df["microrregiao.id"].alias(
-                "microrregiao_id"
-            ),
-
-            df["microrregiao.nome"].alias(
-                "microrregiao_nome"
-            ),
-
-            df["microrregiao.mesorregiao.id"].alias(
-                "mesorregiao_id"
-            ),
-
-            df["microrregiao.mesorregiao.nome"].alias(
-                "mesorregiao_nome"
-            ),
-
-            df["microrregiao.mesorregiao.UF.nome"].alias(
-                "uf_nome"
-            ),
-
-            df["microrregiao.mesorregiao.UF.sigla"].alias(
-                "uf_sigla"
-            ),
-
-            df["microrregiao.mesorregiao.UF.regiao.nome"].alias(
-                "regiao_nome"
-            ),
-
-            df.ingestion_timestamp,
-
-            df.source_system
-
-        )
-
         # Municípios sem UF na fonte IBGE (ex: Boa Esperança do Norte)
         # são descartados na Silver — dados incompletos não têm valor analítico.
-        valid = flattened.filter(F.col("uf_sigla").isNotNull())
+        # _uf_valid evita double count: uma única passagem marca e depois filtra.
+        return (
+            df.select(
 
-        dropped = flattened.count() - valid.count()
-        if dropped > 0:
-            self.logger.warning(
-                f"{dropped} município(s) descartado(s) por uf_sigla nula"
+                df.id.alias("municipio_id"),
+
+                df.nome.alias("municipio_nome"),
+
+                df["microrregiao.id"].alias(
+                    "microrregiao_id"
+                ),
+
+                df["microrregiao.nome"].alias(
+                    "microrregiao_nome"
+                ),
+
+                df["microrregiao.mesorregiao.id"].alias(
+                    "mesorregiao_id"
+                ),
+
+                df["microrregiao.mesorregiao.nome"].alias(
+                    "mesorregiao_nome"
+                ),
+
+                df["microrregiao.mesorregiao.UF.nome"].alias(
+                    "uf_nome"
+                ),
+
+                df["microrregiao.mesorregiao.UF.sigla"].alias(
+                    "uf_sigla"
+                ),
+
+                df["microrregiao.mesorregiao.UF.regiao.nome"].alias(
+                    "regiao_nome"
+                ),
+
+                df.ingestion_timestamp,
+
+                df.source_system,
+
+                F.col("microrregiao.mesorregiao.UF.sigla").isNotNull().alias(
+                    "_uf_valid"
+                ),
+
             )
-
-        return valid
+            .filter(F.col("_uf_valid"))
+            .drop("_uf_valid")
+        )
 
     ###########################################################
     # LOAD
@@ -212,12 +210,12 @@ class IBGESilverPipeline:
             )
 
             ###################################################
-            # RECORD COUNT
+            # RECORD COUNT BRONZE
             ###################################################
 
             count_start = time.perf_counter()
 
-            record_count = df_raw.count()
+            bronze_count = df_raw.count()
 
             count_time = (
                 time.perf_counter() - count_start
@@ -227,9 +225,9 @@ class IBGESilverPipeline:
                 f"Record Count finalizado em {count_time:.2f}s"
             )
 
-            print(f"Total de registros: {record_count}")
+            print(f"Total de registros Bronze: {bronze_count}")
 
-            if record_count == 0:
+            if bronze_count == 0:
 
                 raise ValueError(
                     "Nenhum registro encontrado na Bronze."
@@ -258,12 +256,20 @@ class IBGESilverPipeline:
             # Persist transformed dataframe to speed up multiple quality and load actions (Memory and Disk)
             df.persist(StorageLevel.MEMORY_AND_DISK)
 
+            record_count = df.count()
+
+            dropped_count = bronze_count - record_count
+            if dropped_count > 0:
+                self.logger.warning(
+                    f"{dropped_count} município(s) descartado(s) por uf_sigla nula"
+                )
+
             transform_time = (
                 time.perf_counter() - transform_start
             )
 
             self.logger.info(
-                f"Transform finalizado em {transform_time:.2f}s"
+                f"Transform finalizado em {transform_time:.2f}s | Silver: {record_count} registros"
             )
 
             ###################################################

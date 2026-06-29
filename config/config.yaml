@@ -8,7 +8,7 @@ paths:
   bronze: data/bronze
   silver: data/silver
   gold: data/gold
-  logs: logging
+  logs: logs
 
 logging:
   level: INFO
@@ -17,6 +17,17 @@ logging:
 pipeline:
   retries: 3
   timeout: 600
+  repartitions: 4
+
+debug:
+  show_schema: true
+  show_sample: true
+  show_nulls: true
+
+save:
+  audit: true
+  quality: true
+  metrics: true
 
 quality:
   fail_on_nulls: true

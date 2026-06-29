@@ -29,18 +29,18 @@ Power BI / Looker Studio / Metabase
 
 ## Stack de Tecnologias
 
-| Camada        | Tecnologia                         |
-|---------------|------------------------------------|
-| Processamento | Apache Spark 3.5 / PySpark         |
-| Storage       | Delta Lake 3.2 (ACID + Time Travel)|
-| Orquestração  | Apache Airflow 2.8                 |
-| Qualidade     | Framework próprio (DataQuality)    |
-| Testes        | pytest + pytest-cov                |
-| CI/CD         | GitHub Actions                     |
-| Containers    | Docker + Docker Compose            |
-| Object Store  | MinIO (S3-compatible)              |
-| Banco         | PostgreSQL 15 (metadata Airflow)   |
-| Linguagem     | Python 3.11                        |
+| Camada        | Tecnologia                              |
+|---------------|-----------------------------------------|
+| Processamento | PySpark 4.0.3                           |
+| Storage       | Delta Lake 4.0.1 (ACID + Time Travel)  |
+| Orquestração  | Apache Airflow 2.8 (via Docker)         |
+| Qualidade     | Framework próprio (DataQuality)         |
+| Testes        | pytest 8.3 + pytest-cov 5.0            |
+| CI/CD         | GitHub Actions                          |
+| Containers    | Docker + Docker Compose                 |
+| Object Store  | MinIO (S3-compatible)                   |
+| Banco         | PostgreSQL 15 (metadata Airflow)        |
+| Linguagem     | Python 3.9+                             |
 
 ---
 
