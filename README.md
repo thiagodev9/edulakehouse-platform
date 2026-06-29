@@ -40,7 +40,7 @@ Power BI / Looker Studio / Metabase
 | Containers    | Docker + Docker Compose                 |
 | Object Store  | MinIO (S3-compatible)                   |
 | Banco         | PostgreSQL 15 (metadata Airflow)        |
-| Linguagem     | Python 3.9+                             |
+| Linguagem     | Python 3.11+                            |
 
 ---
 
@@ -48,39 +48,45 @@ Power BI / Looker Studio / Metabase
 
 ```
 edulakehouse-platform/
-├── dags/                          # Sprint 22 — Airflow DAGs
-│   ├── ibge_lakehouse_dag.py      # DAG master: Bronze → Silver → Gold
-│   ├── bronze_dag.py              # DAG Bronze independente
-│   ├── silver_dag.py              # DAG Silver (aguarda Bronze)
-│   └── gold_dag.py                # DAG Gold (aguarda Silver)
+├── dags/                               # Airflow DAGs
+│   ├── ibge_lakehouse_dag.py           # DAG master: Bronze → Silver → Gold
+│   ├── bronze_dag.py                   # DAG Bronze independente
+│   ├── silver_dag.py                   # DAG Silver (aguarda Bronze)
+│   └── gold_dag.py                     # DAG Gold (aguarda Silver)
 ├── data/
-│   ├── landing/ibge/              # JSON bruto da API IBGE
-│   ├── bronze/ibge/               # Parquet (year/month)
-│   ├── silver/ibge/               # Delta Lake (uf_sigla)
-│   └── gold/ibge_dashboard/       # Delta Lake (regiao_nome)
-├── framework/                     # Módulos reutilizáveis
-│   ├── audit.py                   # AuditManager
-│   ├── delta_utils.py             # Sprint 23 — MERGE, OPTIMIZE, VACUUM, Time Travel
-│   ├── monitoring.py              # PipelineMonitor
-│   ├── quality.py                 # DataQuality (Silver)
-│   └── spark.py                   # SparkManager (singleton)
+│   ├── landing/ibge/                   # JSON bruto da API IBGE
+│   ├── bronze/ibge/                    # Parquet (year/month)
+│   ├── silver/ibge/                    # Delta Lake (uf_sigla)
+│   └── gold/ibge_dashboard/            # Delta Lake (regiao_nome)
+├── framework/                          # Módulos reutilizáveis
+│   ├── audit.py                        # AuditManager
+│   ├── base_pipeline.py                # BasePipeline ABC
+│   ├── delta_utils.py                  # MERGE, OPTIMIZE, VACUUM, Time Travel
+│   ├── logger.py                       # LoggerManager (singleton)
+│   ├── monitoring.py                   # PipelineMonitor
+│   ├── quality.py                      # DataQuality
+│   ├── schema_validator.py             # SchemaValidator
+│   └── spark.py                        # SparkManager
 ├── pipelines/
-│   ├── bronze/ibge_pipeline.py    # Ingestão JSON → Parquet
+│   ├── bronze/ibge_pipeline.py         # Ingestão JSON → Parquet
 │   ├── silver/ibge_silver_pipeline.py  # Flatten + Delta MERGE
 │   └── gold/ibge_gold_pipeline.py      # Agregação + Delta MERGE
-├── tests/                         # Sprint 26 — pytest
-│   ├── conftest.py                # SparkSession fixture
+├── scripts/
+│   └── download/download_dataset.py    # Baixa dados da API IBGE
+├── tests/
+│   ├── conftest.py                     # SparkSession + pipeline fixtures
 │   ├── test_bronze_transform.py
 │   ├── test_silver_transform.py
 │   ├── test_gold_transform.py
 │   └── test_quality.py
 ├── logs/
-│   ├── audit/                     # audit_*.json
-│   ├── metrics/                   # metrics_*.json
-│   └── quality/                   # quality_*.json
-├── .github/workflows/ci.yml       # Sprint 25 — CI/CD
-├── docker-compose.yml             # Sprint 24 — Airflow + MinIO + Postgres
+│   ├── audit/                          # audit_*.json
+│   ├── metrics/                        # metrics_*.json
+│   └── quality/                        # quality_*.json
+├── .github/workflows/ci.yml            # Lint → Tests → Pipeline Integration
+├── docker-compose.yml                  # Airflow + MinIO + Postgres
 ├── Dockerfile
+├── .env.example
 └── requirements.txt
 ```
 
@@ -107,7 +113,13 @@ source .venv/bin/activate        # Linux/Mac
 pip install -r requirements.txt
 ```
 
-### 2. Executar as pipelines manualmente
+### 2. Baixar os dados da API IBGE
+
+```bash
+python scripts/download/download_dataset.py
+```
+
+### 3. Executar as pipelines manualmente
 
 ```bash
 # Bronze — ingestão do JSON
@@ -120,10 +132,11 @@ python -m pipelines.silver.ibge_silver_pipeline
 python -m pipelines.gold.ibge_gold_pipeline
 ```
 
-### 3. Executar com Docker (Airflow completo)
+### 4. Executar com Docker (Airflow completo)
 
 ```bash
 cp .env.example .env
+# Edite .env com suas credenciais se necessário
 
 docker compose up --build -d
 
@@ -133,13 +146,13 @@ docker compose up --build -d
 # MinIO Console em http://localhost:9001
 ```
 
-### 4. Ativar a DAG no Airflow
+### 5. Ativar a DAG no Airflow
 
 1. Acesse `http://localhost:8080`
 2. Habilite a DAG `ibge_lakehouse`
 3. Clique em **Trigger DAG** para executar manualmente
 
-### 5. Executar os testes
+### 6. Executar os testes
 
 ```bash
 pytest tests/ -v --cov=pipelines --cov=framework
@@ -174,7 +187,7 @@ pytest tests/ -v --cov=pipelines --cov=framework
 
 ---
 
-## Delta Lake — Funcionalidades (Sprint 23)
+## Delta Lake
 
 ```python
 from framework.delta_utils import DeltaUtils
@@ -195,14 +208,14 @@ DeltaUtils.vacuum(spark, "data/silver/ibge", retention_hours=168)
 
 ---
 
-## Apache Airflow — DAGs (Sprint 22)
+## Apache Airflow — DAGs
 
-| DAG                | Schedule     | Dependência         |
-|--------------------|--------------|---------------------|
-| `ibge_bronze`      | `0 1 * * *`  | —                   |
-| `ibge_silver`      | `0 2 * * *`  | aguarda Bronze      |
-| `ibge_gold`        | `0 3 * * *`  | aguarda Silver      |
-| `ibge_lakehouse`   | `@daily`     | Bronze → Silver → Gold (master) |
+| DAG                | Schedule     | Dependência                      |
+|--------------------|--------------|----------------------------------|
+| `ibge_bronze`      | `0 1 * * *`  | —                                |
+| `ibge_silver`      | `0 2 * * *`  | aguarda Bronze                   |
+| `ibge_gold`        | `0 3 * * *`  | aguarda Silver                   |
+| `ibge_lakehouse`   | `@daily`     | Bronze → Silver → Gold (master)  |
 
 Cada task tem **3 retries** com intervalo de 5 minutos e timeout de 2 horas.
 
@@ -231,7 +244,7 @@ Cada task tem **3 retries** com intervalo de 5 minutos e timeout de 2 horas.
 
 ---
 
-## CI/CD — GitHub Actions (Sprint 25)
+## CI/CD — GitHub Actions
 
 ```
 push/PR
@@ -241,25 +254,8 @@ push/PR
   ├─► Tests (pytest + coverage)
   │
   └─► Pipeline Integration (apenas em main)
+        ├─ Download IBGE data
         ├─ Bronze
         ├─ Silver
         └─ Gold → upload artifacts
 ```
-
----
-
-## Sprints
-
-| Sprint | Tema                    | Status |
-|--------|-------------------------|--------|
-| 20     | Camada Silver           | ✅     |
-| 21     | Camada Gold             | ✅     |
-| 22     | Apache Airflow (DAGs)   | ✅     |
-| 23     | Delta Lake              | ✅     |
-| 24     | Docker + Docker Compose | ✅     |
-| 25     | GitHub Actions (CI/CD)  | ✅     |
-| 26     | Testes Automatizados    | ✅     |
-| 27     | Dashboard (Power BI)    | 🚧     |
-| 28     | Documentação            | ✅     |
-| 29     | Deploy na Cloud         | 🚧     |
-| 30     | Projeto Enterprise      | 🚧     |
