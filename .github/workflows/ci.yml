@@ -97,6 +97,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Download IBGE data
+        run: python scripts/download/download_dataset.py
+
       - name: Bronze Pipeline
         run: python -m pipelines.bronze.ibge_pipeline
 

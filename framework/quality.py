@@ -1,3 +1,7 @@
+import json
+from datetime import datetime
+from pathlib import Path
+
 from pyspark.sql.functions import col, count, when
 
 from framework.logger import LoggerManager
@@ -89,9 +93,6 @@ class DataQuality:
 
     @staticmethod
     def save(report, output_dir="logs/quality"):
-        import json
-        from pathlib import Path
-        from datetime import datetime
 
         logger = LoggerManager().get_logger()
 

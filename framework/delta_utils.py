@@ -8,6 +8,8 @@ Requer delta-spark instalado e SparkSession configurado com:
 
 from pathlib import Path
 
+from framework.logger import LoggerManager
+
 
 class DeltaUtils:
 
@@ -140,11 +142,8 @@ class DeltaUtils:
 
     @staticmethod
     def print_history(spark, path, limit=10):
-        """Imprime o histórico de versões da Delta table."""
-        print()
-        print("=" * 60)
-        print("DELTA TABLE HISTORY")
-        print("=" * 60)
+        """Exibe o histórico de versões da Delta table via logger."""
+        LoggerManager().get_logger().info(f"Delta history — {path}:")
         DeltaUtils.get_history(spark, path, limit).select(
             "version", "timestamp", "operation"
         ).show(truncate=False)
