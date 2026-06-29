@@ -16,6 +16,7 @@ from framework.config import (
     SAVE_METRICS
 )
 from framework.delta_utils import DeltaUtils
+from framework.logger import LoggerManager
 from framework.monitoring import PipelineMonitor
 
 
@@ -84,7 +85,6 @@ class GoldDataQuality:
     @staticmethod
     def print_report(report):
 
-        from framework.logger import LoggerManager
         logger = LoggerManager().get_logger()
 
         logger.info(
@@ -104,7 +104,6 @@ class GoldDataQuality:
     @staticmethod
     def save(report, output_dir="logs/quality"):
 
-        from framework.logger import LoggerManager
         logger = LoggerManager().get_logger()
 
         path = Path(output_dir)
