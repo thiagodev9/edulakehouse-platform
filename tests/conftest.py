@@ -70,6 +70,54 @@ def bronze_schema():
     ])
 
 
+def _pipeline(cls, spark, **attrs):
+    """
+    Instancia uma pipeline sem rodar BasePipeline.__init__, injetando a
+    SparkSession de teste no lugar de abrir uma nova via SparkManager.
+    """
+    from framework.logger import LoggerManager
+
+    pipeline = object.__new__(cls)
+    pipeline.spark = spark
+    pipeline.logger = LoggerManager().get_logger()
+    for key, value in attrs.items():
+        setattr(pipeline, key, value)
+    return pipeline
+
+
+@pytest.fixture(scope="session")
+def bronze_pipeline(spark):
+    from pipelines.bronze.ibge_pipeline import IBGEBronzePipeline
+
+    return _pipeline(
+        IBGEBronzePipeline, spark,
+        input_path="data/landing/ibge/municipios.json",
+        output_path="data/bronze/ibge",
+    )
+
+
+@pytest.fixture(scope="session")
+def silver_pipeline(spark):
+    from pipelines.silver.ibge_silver_pipeline import IBGESilverPipeline
+
+    return _pipeline(
+        IBGESilverPipeline, spark,
+        input_path="data/bronze/ibge",
+        output_path="data/silver/ibge",
+    )
+
+
+@pytest.fixture(scope="session")
+def gold_pipeline(spark):
+    from pipelines.gold.ibge_gold_pipeline import IBGEGoldPipeline
+
+    return _pipeline(
+        IBGEGoldPipeline, spark,
+        input_path="data/silver/ibge",
+        output_path="data/gold/ibge_dashboard",
+    )
+
+
 @pytest.fixture(scope="session")
 def sample_bronze_data():
     """Dados mínimos representando dois municípios de UFs diferentes."""

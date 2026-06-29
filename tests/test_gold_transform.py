@@ -31,30 +31,21 @@ def silver_df(spark):
     return spark.createDataFrame(data, SILVER_COLUMNS)
 
 
-def test_transform_output_columns(spark, silver_df):
-    from pipelines.gold.ibge_gold_pipeline import IBGEGoldPipeline
-
-    pipeline = IBGEGoldPipeline()
-    result = pipeline.transform(silver_df, "test001")
+def test_transform_output_columns(spark, silver_df, gold_pipeline):
+    result = gold_pipeline.transform(silver_df, "test001")
 
     assert set(result.columns) == GOLD_EXPECTED_COLUMNS
 
 
-def test_transform_aggregation_count(spark, silver_df):
-    from pipelines.gold.ibge_gold_pipeline import IBGEGoldPipeline
-
-    pipeline = IBGEGoldPipeline()
-    result = pipeline.transform(silver_df, "test001")
+def test_transform_aggregation_count(spark, silver_df, gold_pipeline):
+    result = gold_pipeline.transform(silver_df, "test001")
 
     # 2 UFs distintas: SP e MG
     assert result.count() == 2
 
 
-def test_transform_municipios_por_uf(spark, silver_df):
-    from pipelines.gold.ibge_gold_pipeline import IBGEGoldPipeline
-
-    pipeline = IBGEGoldPipeline()
-    result = pipeline.transform(silver_df, "test001")
+def test_transform_municipios_por_uf(spark, silver_df, gold_pipeline):
+    result = gold_pipeline.transform(silver_df, "test001")
 
     sp = result.filter("uf_sigla = 'SP'").first()
     mg = result.filter("uf_sigla = 'MG'").first()
@@ -63,33 +54,25 @@ def test_transform_municipios_por_uf(spark, silver_df):
     assert mg.total_municipios == 2
 
 
-def test_transform_run_id_propagated(spark, silver_df):
-    from pipelines.gold.ibge_gold_pipeline import IBGEGoldPipeline
-
+def test_transform_run_id_propagated(spark, silver_df, gold_pipeline):
     run_id = "abc123"
-    pipeline = IBGEGoldPipeline()
-    result = pipeline.transform(silver_df, run_id)
+    result = gold_pipeline.transform(silver_df, run_id)
 
     run_ids = {row.run_id for row in result.collect()}
     assert run_ids == {run_id}
 
 
-def test_transform_data_processamento_not_null(spark, silver_df):
+def test_transform_data_processamento_not_null(spark, silver_df, gold_pipeline):
     from pyspark.sql import functions as F
-    from pipelines.gold.ibge_gold_pipeline import IBGEGoldPipeline
 
-    pipeline = IBGEGoldPipeline()
-    result = pipeline.transform(silver_df, "test001")
+    result = gold_pipeline.transform(silver_df, "test001")
 
     null_count = result.filter(F.col("data_processamento").isNull()).count()
     assert null_count == 0
 
 
-def test_transform_total_municipios_positive(spark, silver_df):
-    from pipelines.gold.ibge_gold_pipeline import IBGEGoldPipeline
-
-    pipeline = IBGEGoldPipeline()
-    result = pipeline.transform(silver_df, "test001")
+def test_transform_total_municipios_positive(spark, silver_df, gold_pipeline):
+    result = gold_pipeline.transform(silver_df, "test001")
 
     non_positive = result.filter("total_municipios <= 0").count()
     assert non_positive == 0
