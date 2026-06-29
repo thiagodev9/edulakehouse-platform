@@ -3,20 +3,21 @@ DAG principal: orquestra Bronze → Silver → Gold em sequência.
 Schedulado diariamente às 00:00 UTC.
 """
 
+import logging
 import os
 import sys
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
-from datetime import datetime, timedelta
 
-# Adiciona a raiz do projeto ao sys.path para que os módulos
-# framework/ e pipelines/ sejam localizáveis pelo Airflow
 sys.path.insert(
     0,
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
+
+log = logging.getLogger(__name__)
 
 
 ###############################################################
@@ -24,19 +25,16 @@ sys.path.insert(
 ###############################################################
 
 def on_task_failure(context):
-    task_id = context["task_instance"].task_id
-    dag_id = context["task_instance"].dag_id
-    execution_date = context["execution_date"]
-    print(
-        f"[FALHA] DAG={dag_id} | Task={task_id} | "
-        f"execution_date={execution_date}"
+    ti = context["task_instance"]
+    log.error(
+        "Task falhou | dag=%s | task=%s | execution_date=%s",
+        ti.dag_id, ti.task_id, context["execution_date"],
     )
 
 
 def on_task_success(context):
-    task_id = context["task_instance"].task_id
-    dag_id = context["task_instance"].dag_id
-    print(f"[OK] DAG={dag_id} | Task={task_id}")
+    ti = context["task_instance"]
+    log.info("Task concluída | dag=%s | task=%s", ti.dag_id, ti.task_id)
 
 
 ###############################################################
@@ -93,10 +91,10 @@ with DAG(
 
     Orquestração completa das camadas Medallion.
 
-    | Camada | Fonte        | Destino             | Partição  |
-    |--------|-------------|---------------------|-----------|
-    | Bronze | landing/JSON | data/bronze/ibge    | year/month|
-    | Silver | Bronze       | data/silver/ibge    | uf_sigla  |
+    | Camada | Fonte        | Destino                  | Partição    |
+    |--------|--------------|--------------------------|-------------|
+    | Bronze | landing/JSON | data/bronze/ibge         | year/month  |
+    | Silver | Bronze       | data/silver/ibge         | uf_sigla    |
     | Gold   | Silver       | data/gold/ibge_dashboard | regiao_nome |
 
     ## Agendamento
@@ -107,31 +105,19 @@ with DAG(
     """,
 ) as dag:
 
-    with TaskGroup(
-        "bronze_layer",
-        tooltip="Camada Bronze — Ingestão"
-    ) as bronze_group:
-
+    with TaskGroup("bronze_layer", tooltip="Camada Bronze — Ingestão") as bronze_group:
         bronze_task = PythonOperator(
             task_id="run_bronze",
             python_callable=run_bronze,
         )
 
-    with TaskGroup(
-        "silver_layer",
-        tooltip="Camada Silver — Transformação"
-    ) as silver_group:
-
+    with TaskGroup("silver_layer", tooltip="Camada Silver — Transformação") as silver_group:
         silver_task = PythonOperator(
             task_id="run_silver",
             python_callable=run_silver,
         )
 
-    with TaskGroup(
-        "gold_layer",
-        tooltip="Camada Gold — Agregação para BI"
-    ) as gold_group:
-
+    with TaskGroup("gold_layer", tooltip="Camada Gold — Agregação para BI") as gold_group:
         gold_task = PythonOperator(
             task_id="run_gold",
             python_callable=run_gold,

@@ -3,17 +3,20 @@ DAG independente da camada Bronze.
 Executado em 01:00 UTC, pode ser ativado separadamente do pipeline completo.
 """
 
+import logging
 import os
 import sys
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from datetime import datetime, timedelta
 
 sys.path.insert(
     0,
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
+
+log = logging.getLogger(__name__)
 
 
 def run_bronze(**context):
@@ -22,9 +25,10 @@ def run_bronze(**context):
 
 
 def on_task_failure(context):
-    print(
-        f"[BRONZE FALHA] task={context['task_instance'].task_id} | "
-        f"data={context['execution_date']}"
+    ti = context["task_instance"]
+    log.error(
+        "Task falhou | dag=%s | task=%s | execution_date=%s",
+        ti.dag_id, ti.task_id, context["execution_date"],
     )
 
 

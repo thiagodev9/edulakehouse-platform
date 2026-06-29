@@ -4,18 +4,21 @@ Aguarda a conclusão do Bronze (ExternalTaskSensor) antes de executar.
 Agendado para 02:00 UTC.
 """
 
+import logging
 import os
 import sys
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.sensors.external_task import ExternalTaskSensor
-from datetime import datetime, timedelta
 
 sys.path.insert(
     0,
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
+
+log = logging.getLogger(__name__)
 
 
 def run_silver(**context):
@@ -24,9 +27,10 @@ def run_silver(**context):
 
 
 def on_task_failure(context):
-    print(
-        f"[SILVER FALHA] task={context['task_instance'].task_id} | "
-        f"data={context['execution_date']}"
+    ti = context["task_instance"]
+    log.error(
+        "Task falhou | dag=%s | task=%s | execution_date=%s",
+        ti.dag_id, ti.task_id, context["execution_date"],
     )
 
 
@@ -50,7 +54,6 @@ with DAG(
     tags=["ibge", "silver"],
 ) as dag:
 
-    # Aguarda o Bronze ter concluído na mesma data de execução
     wait_for_bronze = ExternalTaskSensor(
         task_id="wait_for_bronze",
         external_dag_id="ibge_bronze",

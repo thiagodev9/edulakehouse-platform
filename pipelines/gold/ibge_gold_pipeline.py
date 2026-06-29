@@ -347,7 +347,7 @@ class IBGEGoldPipeline(BasePipeline):
                 version=PIPELINE_VERSION,
             )
 
-            AuditManager.print(audit)
+            AuditManager.log(audit)
             audit_path = AuditManager.save(audit) if SAVE_AUDIT else None
             audit_time = time.perf_counter() - audit_start
 

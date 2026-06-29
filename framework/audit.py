@@ -23,7 +23,7 @@ class AuditManager:
         }
 
     @staticmethod
-    def print(audit):
+    def log(audit):
 
         logger = LoggerManager().get_logger()
 
