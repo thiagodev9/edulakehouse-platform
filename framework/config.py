@@ -3,9 +3,6 @@ import yaml
 
 from framework.dataset import Dataset
 
-PIPELINE_VERSION = "1.0.0"
-
-
 def _load_config(path="config/config.yaml"):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -20,6 +17,7 @@ def _cfg():
 
 _c = _cfg()
 
+PIPELINE_VERSION = _c.get("project", {}).get("version", "1.0.0")
 REPARTITIONS = _c.get("pipeline", {}).get("repartitions", 4)
 DEBUG = _c.get("debug", {}).get("show_nulls", True)
 SHOW_SCHEMA = _c.get("debug", {}).get("show_schema", True)

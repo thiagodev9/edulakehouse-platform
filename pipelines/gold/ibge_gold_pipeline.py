@@ -85,20 +85,28 @@ class GoldDataQuality:
     @staticmethod
     def print_report(report):
 
-        print()
-        print("=" * 60)
-        print("DATA QUALITY REPORT - GOLD")
-        print("=" * 60)
-        print(f"Total UFs................. {report['total_ufs']}")
-        print(f"UFs duplicadas............ {report['duplicate_ufs']}")
-        print(f"UFs nulas/vazias.......... {report['null_ufs']}")
-        print(f"Total negativo............ {report['negative_totals']}")
-        print(f"Total igual zero.......... {report['zero_totals']}")
-        print(f"Taxa de qualidade......... {report['quality']}%")
-        print(f"Status.................... {report['status']}")
+        from framework.logger import LoggerManager
+        logger = LoggerManager().get_logger()
+
+        logger.info(
+            "\n"
+            + "=" * 60 + "\n"
+            + "DATA QUALITY REPORT - GOLD\n"
+            + "=" * 60 + "\n"
+            + f"Total UFs................. {report['total_ufs']}\n"
+            + f"UFs duplicadas............ {report['duplicate_ufs']}\n"
+            + f"UFs nulas/vazias.......... {report['null_ufs']}\n"
+            + f"Total negativo............ {report['negative_totals']}\n"
+            + f"Total igual zero.......... {report['zero_totals']}\n"
+            + f"Taxa de qualidade......... {report['quality']}%\n"
+            + f"Status.................... {report['status']}"
+        )
 
     @staticmethod
     def save(report, output_dir="logs/quality"):
+
+        from framework.logger import LoggerManager
+        logger = LoggerManager().get_logger()
 
         path = Path(output_dir)
         path.mkdir(parents=True, exist_ok=True)
@@ -109,9 +117,7 @@ class GoldDataQuality:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=4, ensure_ascii=False)
 
-        print()
-        print("Relatório de qualidade Gold salvo em:")
-        print(file_path.as_posix())
+        logger.info(f"Quality Gold salvo em: {file_path.as_posix()}")
 
         return file_path.as_posix()
 
@@ -188,17 +194,49 @@ class IBGEGoldPipeline:
         DeltaUtils.vacuum(self.spark, self.output_path, retention_hours=168)
 
     ###########################################################
+    # SUMMARY
+    ###########################################################
+
+    def _log_summary(self, *, run_id, timings, record_count, quality_report,
+                     written_files, audit_path, metrics_path, quality_path):
+
+        t = timings
+        self.logger.info(
+            "\n"
+            + "=" * 60 + "\n"
+            + "PIPELINE SUMMARY\n"
+            + "=" * 60 + "\n"
+            + f"Extract............ {t['extract']:.2f}s\n"
+            + f"Transform.......... {t['transform']:.2f}s\n"
+            + f"Quality............ {t['quality']:.2f}s\n"
+            + f"Load............... {t['load']:.2f}s\n"
+            + f"Audit.............. {t['audit']:.2f}s\n"
+            + "-" * 60 + "\n"
+            + f"TOTAL.............. {t['pipeline']:.2f}s\n"
+            + f"REGISTROS.......... {record_count}\n"
+            + f"QUALIDADE.......... {quality_report['quality']}%\n"
+            + f"STATUS............. {quality_report['status']}\n"
+            + f"ARQUIVOS ESCRITOS.. {written_files}\n"
+            + f"RUN ID............. {run_id}\n"
+            + "\n"
+            + "=" * 60 + "\n"
+            + "OUTPUTS\n"
+            + "=" * 60 + "\n"
+            + f"Gold............... {self.output_path}\n"
+            + (f"Audit.............. {audit_path}\n" if audit_path else "")
+            + (f"Metrics............ {metrics_path}\n" if metrics_path else "")
+            + (f"Quality............ {quality_path}\n" if quality_path else "")
+            + f"Run ID............. {run_id}"
+        )
+
+    ###########################################################
     # RUN
     ###########################################################
 
     def run(self):
 
         run_id = uuid.uuid4().hex[:8]
-
-        self.logger.info(
-            f"Iniciando pipeline IBGE Gold | RUN ID: {run_id}"
-        )
-
+        self.logger.info(f"Iniciando pipeline IBGE Gold | RUN ID: {run_id}")
         pipeline_start = time.perf_counter()
 
         df_silver = None
@@ -211,51 +249,33 @@ class IBGEGoldPipeline:
             ###################################################
 
             extract_start = time.perf_counter()
-
             df_silver = self.extract()
-
             df_silver.persist(StorageLevel.MEMORY_AND_DISK)
-
             extract_time = time.perf_counter() - extract_start
 
-            self.logger.info(f"Extract finalizado em {extract_time:.2f}s")
+            self.logger.info(f"Extract: {extract_time:.2f}s")
 
             ###################################################
             # TRANSFORM
             ###################################################
 
             transform_start = time.perf_counter()
-
             df_gold = self.transform(df_silver, run_id)
-
             df_gold.persist(StorageLevel.MEMORY_AND_DISK)
-
-            record_count = df_gold.count()
-
             transform_time = time.perf_counter() - transform_start
 
-            self.logger.info(
-                f"Transform finalizado em {transform_time:.2f}s | UFs: {record_count}"
-            )
+            self.logger.info(f"Transform: {transform_time:.2f}s")
 
             ###################################################
             # VIEWS ANALÍTICAS
             ###################################################
 
-            print()
-            print("=" * 60)
-            print("MUNICÍPIOS POR ESTADO")
-            print("=" * 60)
+            self.logger.info("Municípios por Estado:")
+            df_gold.select("uf_sigla", "uf_nome", "total_municipios").show(
+                30, truncate=False
+            )
 
-            df_gold.select(
-                "uf_sigla", "uf_nome", "total_municipios"
-            ).show(record_count, truncate=False)
-
-            print()
-            print("=" * 60)
-            print("MUNICÍPIOS POR REGIÃO")
-            print("=" * 60)
-
+            self.logger.info("Municípios por Região:")
             (
                 df_gold
                 .groupBy("regiao_nome")
@@ -264,11 +284,7 @@ class IBGEGoldPipeline:
                 .show(truncate=False)
             )
 
-            print()
-            print("=" * 60)
-            print("ESTADOS POR REGIÃO")
-            print("=" * 60)
-
+            self.logger.info("Estados por Região:")
             (
                 df_gold
                 .groupBy("regiao_nome")
@@ -282,20 +298,19 @@ class IBGEGoldPipeline:
             ###################################################
 
             quality_start = time.perf_counter()
-
             quality_report = GoldDataQuality.check(df_gold)
-
             GoldDataQuality.print_report(quality_report)
-
-            quality_path = (
-                GoldDataQuality.save(quality_report)
-                if SAVE_QUALITY else None
-            )
-
+            quality_path = GoldDataQuality.save(quality_report) if SAVE_QUALITY else None
             quality_time = time.perf_counter() - quality_start
 
+            # record_count vem do quality_report — sem Spark action extra
+            record_count = quality_report["total_ufs"]
+
             self.logger.info(
-                f"Data Quality executada em {quality_time:.2f}s"
+                f"Quality: {quality_time:.2f}s"
+                f" | {record_count} UFs"
+                f" | {quality_report['quality']}%"
+                f" | {quality_report['status']}"
             )
 
             ###################################################
@@ -303,34 +318,22 @@ class IBGEGoldPipeline:
             ###################################################
 
             load_start = time.perf_counter()
-
             self.load(df_gold)
-
             load_time = time.perf_counter() - load_start
 
-            # Conta apenas arquivos de dados, excluindo _delta_log (checkpoints)
             written_files = len([
                 f for f in Path(self.output_path).rglob("*.parquet")
                 if "_delta_log" not in f.parts
             ])
 
             self.logger.info(
-                f"Load finalizado em {load_time:.2f}s"
-                f" | Arquivos Parquet: {written_files}"
+                f"Load: {load_time:.2f}s | {written_files} arquivos Parquet"
             )
 
             df_silver.unpersist()
             df_gold.unpersist()
 
-            ###################################################
-            # PIPELINE TOTAL
-            ###################################################
-
             pipeline_time = time.perf_counter() - pipeline_start
-
-            print()
-            print(f"Dados gravados em: {self.output_path}")
-            print()
 
             self.logger.success("Pipeline Gold finalizada com sucesso.")
 
@@ -346,79 +349,46 @@ class IBGEGoldPipeline:
                 records=record_count,
                 quality=quality_report["quality"],
                 duration=pipeline_time,
-                version=PIPELINE_VERSION
+                version=PIPELINE_VERSION,
             )
 
             AuditManager.print(audit)
-
-            audit_path = (
-                AuditManager.save(audit) if SAVE_AUDIT else None
-            )
-
+            audit_path = AuditManager.save(audit) if SAVE_AUDIT else None
             audit_time = time.perf_counter() - audit_start
 
             ###################################################
             # METRICS
             ###################################################
 
-            metrics = {
+            metrics_path = PipelineMonitor.save_metrics({
                 "extract": extract_time,
                 "transform": transform_time,
                 "quality": quality_time,
                 "load": load_time,
-                "total": pipeline_time
-            }
+                "total": pipeline_time,
+            }) if SAVE_METRICS else None
 
-            metrics_path = (
-                PipelineMonitor.save_metrics(metrics)
-                if SAVE_METRICS else None
+            ###################################################
+            # SUMMARY
+            ###################################################
+
+            self._log_summary(
+                run_id=run_id,
+                timings={
+                    "extract": extract_time,
+                    "transform": transform_time,
+                    "quality": quality_time,
+                    "load": load_time,
+                    "audit": audit_time,
+                    "pipeline": pipeline_time,
+                },
+                record_count=record_count,
+                quality_report=quality_report,
+                written_files=written_files,
+                audit_path=audit_path,
+                metrics_path=metrics_path,
+                quality_path=quality_path,
             )
-
-            ###################################################
-            # PIPELINE SUMMARY
-            ###################################################
-
-            print()
-            print("=" * 60)
-            print("PIPELINE SUMMARY")
-            print("=" * 60)
-
-            print(f"Extract............ {extract_time:.2f}s")
-            print(f"Transform.......... {transform_time:.2f}s")
-            print(f"Quality............ {quality_time:.2f}s")
-            print(f"Load............... {load_time:.2f}s")
-            print(f"Audit.............. {audit_time:.2f}s")
-
-            print("-" * 60)
-
-            print(f"TOTAL.............. {pipeline_time:.2f}s")
-            print(f"REGISTROS.......... {record_count}")
-            print(f"QUALIDADE.......... {quality_report['quality']}%")
-            print(f"STATUS............. {quality_report['status']}")
-            print(f"ARQUIVOS ESCRITOS.. {written_files}")
-            print(f"RUN ID............. {run_id}")
-
-            ###################################################
-            # OUTPUTS
-            ###################################################
-
-            print()
-            print("=" * 60)
-            print("OUTPUTS")
-            print("=" * 60)
-
-            print(f"Gold............... {self.output_path}")
-
-            if audit_path:
-                print(f"Audit.............. {audit_path}")
-
-            if metrics_path:
-                print(f"Metrics............ {metrics_path}")
-
-            if quality_path:
-                print(f"Quality............ {quality_path}")
-
-            print(f"Run ID............. {run_id}")
 
             self.logger.info(
                 f"Pipeline executada em {pipeline_time:.2f}s | RUN ID: {run_id}"
@@ -431,17 +401,13 @@ class IBGEGoldPipeline:
                     df_gold.unpersist()
                 except Exception:
                     pass
-
             if df_silver is not None:
                 try:
                     df_silver.unpersist()
                 except Exception:
                     pass
 
-            self.logger.exception(
-                f"Erro durante execução da pipeline Gold: {e}"
-            )
-
+            self.logger.exception(f"Erro durante execução da pipeline Gold: {e}")
             raise
 
 
