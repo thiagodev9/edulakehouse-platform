@@ -1,43 +1,23 @@
-import time
 from abc import ABC, abstractmethod
 
-from framework.config import ConfigManager
 from framework.logger import LoggerManager
+from framework.spark import SparkManager
 
 
 class BasePipeline(ABC):
 
     def __init__(self):
-
-        self.config = ConfigManager()
-
         self.logger = LoggerManager().get_logger()
+        self.spark = SparkManager().get_session()
 
     @abstractmethod
-    def run(self):
-        """
-        Método obrigatório.
-        """
-        pass
+    def extract(self): ...
 
-    def execute(self):
+    @abstractmethod
+    def transform(self, df): ...
 
-        start = time.time()
+    @abstractmethod
+    def load(self, df): ...
 
-        self.logger.info("Pipeline iniciado")
-
-        try:
-
-            self.run()
-
-            elapsed = round(time.time() - start, 2)
-
-            self.logger.success(
-                f"Pipeline finalizado em {elapsed} segundos."
-            )
-
-        except Exception as e:
-
-            self.logger.exception(e)
-
-            raise
+    @abstractmethod
+    def run(self): ...

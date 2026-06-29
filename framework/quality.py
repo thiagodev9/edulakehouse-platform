@@ -1,9 +1,6 @@
-from pyspark.sql.functions import (
-    col,
-    count,
-    when
-)
-from loguru import logger
+from pyspark.sql.functions import col, count, when
+
+from framework.logger import LoggerManager
 
 
 class DataQuality:
@@ -11,20 +8,9 @@ class DataQuality:
     @staticmethod
     def generate_report(df, primary_key):
 
-        print()
-        print("=" * 60)
-        print("DATA QUALITY REPORT")
-        print("=" * 60)
-
-        ###########################################################
-        # TOTAL DE REGISTROS
-        ###########################################################
+        logger = LoggerManager().get_logger()
 
         total_records = df.count()
-
-        ###########################################################
-        # DUPLICADOS
-        ###########################################################
 
         duplicate_count = (
             df.groupBy(primary_key)
@@ -33,183 +19,72 @@ class DataQuality:
             .count()
         )
 
-        ###########################################################
-        # CONTAGEM DE NULLS (1 ÚNICA LEITURA)
-        ###########################################################
-
         null_result = (
             df.select([
-                count(
-                    when(col(c).isNull(), c)
-                ).alias(c)
+                count(when(col(c).isNull(), c)).alias(c)
                 for c in df.columns
             ])
             .collect()[0]
         )
 
-        null_columns = []
+        null_columns = [
+            (column, null_result[column])
+            for column in df.columns
+            if null_result[column] > 0
+        ]
 
-        for column in df.columns:
-
-            if null_result[column] > 0:
-
-                null_columns.append(
-                    (column, null_result[column])
-                )
-
-        ###########################################################
-        # REGISTROS INVÁLIDOS
-        ###########################################################
-
-        invalid_rows = df.filter(
-            col(primary_key).isNull()
-        )
-
+        invalid_rows = df.filter(col(primary_key).isNull())
         for column, _ in null_columns:
-
-            invalid_rows = invalid_rows.union(
-
-                df.filter(
-                    col(column).isNull()
-                )
-
-            )
-
+            invalid_rows = invalid_rows.union(df.filter(col(column).isNull()))
         invalid_rows = invalid_rows.dropDuplicates()
-
         invalid_count = invalid_rows.count()
 
-        ###########################################################
-        # MÉTRICAS
-        ###########################################################
-
         valid_records = total_records - invalid_count
-
-        quality = round(
-
-            (valid_records / total_records) * 100,
-
-            2
-
-        ) if total_records > 0 else 0
-
-        if duplicate_count == 0 and invalid_count == 0:
-
-            status = "OK"
-
-        elif quality >= 99:
-
-            status = "WARNING"
-
-        elif quality >= 95:
-
-            status = "ERROR"
-
-        else:
-
-            status = "CRITICAL"
-
-        ###########################################################
-        # RESUMO
-        ###########################################################
-
-        print(f"Total registros............... {total_records}")
-        print(f"Registros válidos............ {valid_records}")
-        print(f"Registros com NULL........... {invalid_count}")
-        print(f"Duplicados................... {duplicate_count}")
-        print(f"Taxa de qualidade............ {quality}%")
-        print(f"Status....................... {status}")
-
-        ###########################################################
-        # DETALHES
-        ###########################################################
-
-        if invalid_count > 0:
-
-            print()
-            print("=" * 60)
-            print("DETALHES")
-            print("=" * 60)
-
-            rows = invalid_rows.collect()
-
-            for row in rows:
-
-                logger.warning(
-
-                    "Registro inválido | "
-
-                    f"id={row.municipio_id} | "
-
-                    f"municipio={row.municipio_nome}"
-
-                )
-
-                print()
-
-                print(
-                    f"{row.municipio_nome} "
-                    f"({row.municipio_id})"
-                )
-
-                print()
-
-                print("Campos nulos:")
-
-                for column, _ in null_columns:
-
-                    if row[column] is None:
-
-                        print(f" - {column}")
-
-                print("-" * 40)
-
-        else:
-
-            logger.success(
-                "Nenhum problema de qualidade encontrado."
-            )
-
-            print()
-            print("Nenhum problema encontrado.")
-
-        ###########################################################
-        # LOG FINAL
-        ###########################################################
-
-        logger.info(
-            f"""
-Resumo Data Quality
--------------------
-Registros........... {total_records}
-Válidos............. {valid_records}
-Inválidos........... {invalid_count}
-Duplicados.......... {duplicate_count}
-Qualidade........... {quality}%
-Status.............. {status}
-"""
+        quality = (
+            round((valid_records / total_records) * 100, 2)
+            if total_records > 0 else 0.0
         )
 
-        ###########################################################
-        # RETORNO
-        ###########################################################
+        if duplicate_count == 0 and invalid_count == 0:
+            status = "SUCCESS"
+        elif quality >= 99:
+            status = "WARNING"
+        elif quality >= 95:
+            status = "ERROR"
+        else:
+            status = "CRITICAL"
+
+        if invalid_count > 0:
+            rows = invalid_rows.collect()
+            for row in rows:
+                fields = ", ".join(
+                    col_name for col_name, _ in null_columns
+                    if row[col_name] is None
+                )
+                logger.warning(
+                    f"Registro inválido | id={row[primary_key]}"
+                    + (f" | campos nulos: {fields}" if fields else "")
+                )
+        else:
+            logger.success("Nenhum problema de qualidade encontrado.")
+
+        logger.info(
+            f"Quality | total={total_records}"
+            f" | válidos={valid_records}"
+            f" | inválidos={invalid_count}"
+            f" | duplicados={duplicate_count}"
+            f" | qualidade={quality}%"
+            f" | status={status}"
+        )
 
         return {
-
             "records": total_records,
-
             "valid_records": valid_records,
-
             "null_records": invalid_count,
-
             "duplicates": duplicate_count,
-
             "quality": quality,
-
             "status": status,
-
-            "columns_with_null": len(null_columns)
-
+            "columns_with_null": len(null_columns),
         }
 
     @staticmethod
@@ -218,20 +93,23 @@ Status.............. {status}
         from pathlib import Path
         from datetime import datetime
 
+        logger = LoggerManager().get_logger()
+
         path = Path(output_dir)
         path.mkdir(parents=True, exist_ok=True)
 
         filename = f"quality_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         file_path = path / filename
 
-        keys_to_save = ["records", "valid_records", "duplicates", "null_records", "quality", "status"]
-        data_to_save = {k: report[k] for k in keys_to_save if k in report}
-
+        keys_to_save = [
+            "records", "valid_records", "duplicates",
+            "null_records", "quality", "status",
+        ]
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(data_to_save, f, indent=4, ensure_ascii=False)
+            json.dump(
+                {k: report[k] for k in keys_to_save if k in report},
+                f, indent=4, ensure_ascii=False,
+            )
 
-        print()
-        print(f"Relatório de qualidade salvo em:")
-        print(file_path.as_posix())
-
+        logger.info(f"Quality salvo em: {file_path.as_posix()}")
         return file_path.as_posix()

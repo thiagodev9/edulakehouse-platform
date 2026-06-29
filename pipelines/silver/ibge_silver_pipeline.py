@@ -6,6 +6,7 @@ from pyspark import StorageLevel
 from pyspark.sql import functions as F
 
 from framework.audit import AuditManager
+from framework.base_pipeline import BasePipeline
 from framework.config import (
     PIPELINE_VERSION,
     REPARTITIONS,
@@ -17,19 +18,16 @@ from framework.config import (
     SAVE_METRICS
 )
 from framework.delta_utils import DeltaUtils
-from framework.logger import LoggerManager
 from framework.monitoring import PipelineMonitor
 from framework.quality import DataQuality
 from framework.schema_validator import SchemaValidator
-from framework.spark import SparkManager
 
 
-class IBGESilverPipeline:
+class IBGESilverPipeline(BasePipeline):
 
     def __init__(self):
 
-        self.spark = SparkManager().get_session()
-        self.logger = LoggerManager().get_logger()
+        super().__init__()
         self.input_path = "data/bronze/ibge"
         self.output_path = "data/silver/ibge"
 
