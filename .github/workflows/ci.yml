@@ -1,0 +1,114 @@
+name: EduLakehouse CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  ###############################################################
+  # LINT
+  ###############################################################
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install lint tools
+        run: pip install flake8
+
+      - name: flake8
+        run: |
+          flake8 framework/ pipelines/ dags/ \
+            --max-line-length=120 \
+            --exclude=__pycache__,.venv
+
+  ###############################################################
+  # TESTES UNITÁRIOS
+  ###############################################################
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Setup Java (obrigatório para PySpark)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: temurin
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-cov
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v \
+            --cov=pipelines \
+            --cov=framework \
+            --cov-report=xml \
+            --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  ###############################################################
+  # PIPELINE INTEGRATION (apenas na branch main)
+  ###############################################################
+  pipeline:
+    name: Pipeline Integration
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: temurin
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Bronze Pipeline
+        run: python -m pipelines.bronze.ibge_pipeline
+
+      - name: Silver Pipeline
+        run: python -m pipelines.silver.ibge_silver_pipeline
+
+      - name: Gold Pipeline
+        run: python -m pipelines.gold.ibge_gold_pipeline
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-logs
+          path: logs/
+          retention-days: 7

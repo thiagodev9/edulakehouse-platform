@@ -3,6 +3,15 @@ import yaml
 
 from framework.dataset import Dataset
 
+PIPELINE_VERSION = "1.0.0"
+REPARTITIONS = 4
+DEBUG = True
+SHOW_SAMPLE = True
+SHOW_SCHEMA = True
+SAVE_AUDIT = True
+SAVE_QUALITY = True
+SAVE_METRICS = True
+
 
 class ConfigManager:
     """

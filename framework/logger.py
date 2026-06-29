@@ -1,36 +1,34 @@
-from pathlib import Path
 from loguru import logger
-
-from framework.config import ConfigManager
+import sys
+from pathlib import Path
 
 
 class LoggerManager:
-    """
-    Gerencia os logs do projeto.
-    """
 
     def __init__(self):
 
-        config = ConfigManager()
+        log_dir = Path("logs")
 
-        log_path = Path(config.get("paths.logs"))
-
-        log_path.mkdir(parents=True, exist_ok=True)
+        log_dir.mkdir(exist_ok=True)
 
         logger.remove()
 
         logger.add(
-            log_path / "pipeline.log",
-            level=config.get("logging.level"),
-            rotation="10 MB",
-            retention="30 days",
-            compression="zip",
-            enqueue=True,
+            sys.stdout,
+            format=(
+                "{time:YYYY-MM-DD HH:mm:ss} | "
+                "{level:<8} | "
+                "{message}"
+            ),
+            level="INFO"
         )
 
         logger.add(
-            sink=lambda msg: print(msg, end=""),
-            level=config.get("logging.level"),
+            "logs/pipeline.log",
+            rotation="10 MB",
+            retention="30 days",
+            compression="zip",
+            level="INFO"
         )
 
         self.logger = logger

@@ -31,12 +31,35 @@ class SparkManager:
                             f"{hadoop_bin}{os.path.pathsep}{path_env}"
                         )
 
-        self.spark = (
+        builder = (
             SparkSession.builder
             .appName("EduLakehouse")
             .master("local[*]")
-            .getOrCreate()
+            .config("spark.sql.shuffle.partitions", "32")
         )
+
+        # Sprint 23 — Delta Lake
+        # PySpark 4.0 + delta-spark 4.0 exige tanto o JAR no classpath (via
+        # configure_spark_with_delta_pip) quanto as extensões configuradas
+        # explicitamente. configure_spark_with_delta_pip resolve o JAR via Ivy,
+        # mas não seta as extensões no PySpark 4.0 — por isso os dois blocos.
+        try:
+            from delta import configure_spark_with_delta_pip
+            builder = configure_spark_with_delta_pip(
+                builder
+                .config(
+                    "spark.sql.extensions",
+                    "io.delta.sql.DeltaSparkSessionExtension",
+                )
+                .config(
+                    "spark.sql.catalog.spark_catalog",
+                    "org.apache.spark.sql.delta.catalog.DeltaCatalog",
+                )
+            )
+        except ImportError:
+            pass  # delta-spark não instalado; pipelines usarão Parquet
+
+        self.spark = builder.getOrCreate()
 
     def get_session(self):
 

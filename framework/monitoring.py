@@ -94,3 +94,22 @@ class PipelineMonitor:
         print(filename)
 
         print()
+
+    @staticmethod
+    def save_metrics(metrics, output_dir="logs/metrics"):
+        path = Path(output_dir)
+        path.mkdir(parents=True, exist_ok=True)
+
+        filename = f"metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        file_path = path / filename
+
+        formatted_metrics = {k: round(v, 2) for k, v in metrics.items()}
+
+        with open(file_path, "w", encoding="utf-8") as file:
+            json.dump(formatted_metrics, file, indent=4, ensure_ascii=False)
+
+        print()
+        print("Log de métricas salvo em:")
+        print(file_path.as_posix())
+
+        return file_path.as_posix()
